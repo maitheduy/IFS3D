@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Paraboloid IFS Generator in R^3</title>
+  <script src="https://cdn.tailwindcss.com/3.4.1"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.2.0/math.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/OrbitControls.min.js"></script>
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <style>
+    #canvas {
+      width: 100% !important;
+      height: 400px !important;
+      border: 1px solid #ccc;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 p-6 min-h-screen">
+  <div class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div>
+      <h1 class="text-2xl font-bold text-center text-blue-700 mb-4">Paraboloid as IFS Attractor in R^3</h1>
+      <div id="canvas"></div>
+      <div class="mt-6 space-y-4">
+        <div>
+          <label class="block mb-1">a (hệ số x²):</label>
+          <input type="range" id="a" min="-30" max="30" step="0.01" value="1" class="w-full">
+          <input type="number" id="a_val" value="1" min="-30" max="30" class="w-full border mt-1 p-1">
+        </div>
+        <div>
+          <label class="block mb-1">b (hệ số y²):</label>
+          <input type="range" id="b" min="-30" max="30" step="0.01" value="1" class="w-full">
+          <input type="number" id="b_val" value="1" min="-30" max="30" class="w-full border mt-1 p-1">
+        </div>
+        <div>
+          <label class="block mb-1">u1 (tỷ lệ co f1, u2 = 1 - u1):</label>
+          <input type="range" id="u1" min="0.1" max="0.9" step="0.01" value="0.5" class="w-full">
+          <input type="number" id="u1_val" value="0.5" min="0.1" max="0.9" step="0.01" class="w-full border mt-1 p-1">
+        </div>
+      </div>
+    </div>
+    <div>
+      <h2 class="text-lg font-semibold text-gray-800 mb-2">Công thức hệ hàm co phụ thuộc a, b, u1 (u2 = 1 - u1, b1 = 0, b2 = 0.5, b3 = 0.25, p1 = u1, p2 = 1 - u1):</h2>
+      <div id="formulas" class="text-sm text-gray-800">
+        \[
+        \begin{align}
+        f_1(x, y, z) &= \begin{pmatrix} u_1 & 0 & 0 \\ 0 & u_1 & 0 \\ 0 & 0 & u_1^2 \end{pmatrix} \begin{pmatrix} x \\ y \\ z \end{pmatrix} \\
+        f_2(x, y, z) &= \begin{pmatrix} u_2 & 0 & 0 \\ 0 & u_2 & 0 \\ 0 & u_2 & u_2^2 \end{pmatrix} \begin{pmatrix} x \\ y \\ z \end{pmatrix} + \begin{pmatrix} 0 \\ 0.5 \\ 0.25 \end{pmatrix} \\
+        \end{align}
+        \]
+        Attractor của hệ hàm lặp trên có phương trình là: \\
+        \[
+        z = a x^2 + b y^2
+        \]
+      </div>
+      <div id="coeffOutput" class="text-sm text-gray-800 mt-4"></div>
+    </div>
+  </div>
+<script>
+// Wait for all scripts to load
+document.addEventListener('DOMContentLoaded', function() {
+  // DOM elements
+  const aSlider = document.getElementById('a');
+  const bSlider = document.getElementById('b');
+  const u1Slider = document.getElementById('u1');
+  const aVal = document.getElementById('a_val');
+  const bVal = document.getElementById('b_val');
+  const u1Val = document.getElementById('u1_val');
+  const formulas = document.getElementById('formulas');
+  const coeffOutput = document.getElementById('coeffOutput');
+
+  // Three.js setup
+  const scene = new THREE.Scene();
+  const canvasContainer = document.getElementById('canvas');
+  const width = canvasContainer.clientWidth;
+  const height = canvasContainer.clientHeight;
+  const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(width, height);
+  canvasContainer.appendChild(renderer.domElement);
+
+  // OrbitControls for rotation
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+
+  // Camera position
+  camera.position.set(2, 2, 2);
+  camera.lookAt(0, 0, 0);
+
+  // Format coefficient
+  function formatCoefficient(value) {
+    if (Number.isInteger(value) || Math.abs(value - Math.floor(value)) < 1e-10) {
+      return Math.floor(value).toString();
+    }
+    return value.toFixed(2);
+  }
+
+  // Define IFS
+  function getIFS(a, b, u1) {
+    const u2 = 1 - u1; // u1 + u2 = 1
+    const f1 = {
+      M: [[u1, 0, 0], [0, u1, 0], [0, 0, u1 * u1]],
+      b: [0, 0, 0]
+    };
+    const f2 = {
+      M: [[u2, 0, 0], [0, u2, 0], [0, u2, u2 * u2]],
+      b: [0, 0.5, 0.25]
+    };
+    return [f1, f2];
+  }
+
+  // Draw IFS using Chaos Game
+  function drawIFS(ifs, probs) {
+    // Clear previous points
+    while(scene.children.length > 0) { 
+      scene.remove(scene.children[0]); 
+    }
+    
+    const points = [];
+    let pt = [Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2];
+    for (let i = 0; i < 30000; i++) {
+      const rand = Math.random();
+      const idx = rand < probs[0] ? 0 : 1;
+      const f = ifs[idx];
+      pt = math.add(math.multiply(f.M, pt), f.b);
+      points.push(new THREE.Vector3(pt[0], pt[1], pt[2]));
+    }
+
+    // Create PointCloud
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const material = new THREE.PointsMaterial({
+      color: 0x00cc44,
+      size: 0.02,
+      sizeAttenuation: true
+    });
+    const pointCloud = new THREE.Points(geometry, material);
+    scene.add(pointCloud);
+  }
+
+  // Animation loop
+  function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  // Update function
+  function update() {
+    const a = parseFloat(aSlider.value);
+    const b = parseFloat(bSlider.value);
+    const u1 = parseFloat(u1Slider.value);
+    const u2 = 1 - u1;
+    aVal.value = a;
+    bVal.value = b;
+    u1Val.value = u1;
+    const ifs = getIFS(a, b, u1);
+    const probs = [u1, 1 - u1]; // p1 = u1, p2 = 1 - u1
+    drawIFS(ifs, probs);
+    const w1 = u1 * u1;
+    const w2 = u2 * u2;
+    const aFormatted = formatCoefficient(a);
+    const bFormatted = formatCoefficient(b);
+    const u1Formatted = formatCoefficient(u1);
+    const u2Formatted = formatCoefficient(u2);
+    const b1Formatted = formatCoefficient(0);
+    const w1Formatted = formatCoefficient(w1);
+    const w2Formatted = formatCoefficient(w2);
+    const b2Formatted = formatCoefficient(0.5);
+    const b3Formatted = formatCoefficient(0.25);
+    const p1Formatted = formatCoefficient(u1);
+    const p2Formatted = formatCoefficient(1 - u1);
+    coeffOutput.innerHTML = `\\[ \\begin{align} 
+      f_1(x, y, z) &= \\begin{pmatrix} ${u1Formatted} & 0 & 0 \\\\ 0 & ${u1Formatted} & 0 \\\\ 0 & 0 & ${w1Formatted} \\end{pmatrix} \\begin{pmatrix} x \\\\ y \\\\ z \\end{pmatrix} \\\\
+      f_2(x, y, z) &= \\begin{pmatrix} ${u2Formatted} & 0 & 0 \\\\ 0 & ${u2Formatted} & 0 \\\\ 0 & ${u2Formatted} & ${w2Formatted} \\end{pmatrix} \\begin{pmatrix} x \\\\ y \\\\ z \\end{pmatrix} + \\begin{pmatrix} ${b1Formatted} \\\\ ${b2Formatted} \\\\ ${b3Formatted} \\end{pmatrix} \\\\
+      \\text{Xác suất:} \\quad p_1 &= ${p1Formatted}, \\quad p_2 = ${p2Formatted} \\\\
+      \\text{Attractor:} \\quad z &= ${aFormatted} x^2 + ${bFormatted} y^2
+    \\end{align} \\]`;
+    if (window.MathJax) MathJax.typesetPromise([coeffOutput]);
+  }
+
+  // Event listeners
+  aSlider.addEventListener('input', update);
+  bSlider.addEventListener('input', update);
+  u1Slider.addEventListener('input', update);
+  aVal.addEventListener('change', () => { aSlider.value = aVal.value; update(); });
+  bVal.addEventListener('change', () => { bSlider.value = bVal.value; update(); });
+  u1Val.addEventListener('change', () => { u1Slider.value = u1Val.value; update(); });
+
+  // Handle window resize
+  window.addEventListener('resize', function() {
+    const width = canvasContainer.clientWidth;
+    const height = canvasContainer.clientHeight;
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+    renderer.setSize(width, height);
+  });
+
+  // Initial render
+  update();
+});
+</script>
+</body>
+</html>
