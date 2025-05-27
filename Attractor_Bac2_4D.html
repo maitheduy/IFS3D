@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>4D Attractor Visualization</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- MathJax CDN -->
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <!-- math.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.min.js"></script>
+    <!-- Three.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <!-- OrbitControls for Three.js -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.134.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #canvas-container {
+            width: 500px;
+            height: 500px;
+            position: relative;
+            border: 1px solid #ddd;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        #legend {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 10;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        #equations {
+            overflow-y: auto;
+            max-height: 80vh;
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        .control-panel {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+        .slider-container {
+            margin-bottom: 15px;
+        }
+        .slider-container label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        .axis-label {
+            position: absolute;
+            color: white;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="container mx-auto p-6">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">
+            Siêu mặt từ \( f_1 \) (xanh lá) và \( f_2 \) (đỏ) trong không gian \( O_{txy} \)
+        </h1>
+        
+        <div class="flex flex-col lg:flex-row gap-6">
+            <!-- Left Side: Visualization and Controls -->
+            <div class="lg:w-2/5 flex flex-col">
+                <!-- Visualization Canvas -->
+                <div class="flex-1 flex items-center justify-center">
+                    <div id="canvas-container">
+                        <div id="legend">
+                            <div class="flex items-center mb-2">
+                                <span class="inline-block w-4 h-4 bg-green-500 rounded-full mr-2"></span>
+                                <span>\( f_1 \) (xanh lá)</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="inline-block w-4 h-4 bg-red-500 rounded-full mr-2"></span>
+                                <span>\( f_2 \) (đỏ)</span>
+                            </div>
+                        </div>
+                        <canvas id="attractorCanvas"></canvas>
+                        <div id="t-label" class="axis-label" style="bottom: 10px; right: 50%; transform: translateX(50%);">Trục T</div>
+                        <div id="x-label" class="axis-label" style="top: 50%; left: 10px; transform: translateY(-50%) rotate(-90deg);">Trục X</div>
+                        <div id="y-label" class="axis-label" style="top: 10px; left: 50%; transform: translateX(-50%);">Trục Y</div>
+                    </div>
+                </div>
+                
+                <!-- Control Panel -->
+                <div class="control-panel">
+                    <h2 class="text-xl font-semibold mb-4 text-gray-700">Điều khiển</h2>
+                    
+                    <div class="slider-container">
+                        <label for="alpha-slider">Hệ số \( \alpha \): <span id="alpha-value" class="font-mono">0.625</span></label>
+                        <input type="range" id="alpha-slider" min="0" max="1" step="0.001" value="0.625" 
+                               class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                    </div>
+                    
+                    <div class="slider-container">
+                        <label for="point-size-slider">Kích thước điểm: <span id="point-size-value" class="font-mono">0.02</span></label>
+                        <input type="range" id="point-size-slider" min="0.01" max="0.1" step="0.001" value="0.02" 
+                               class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                    </div>
+                    
+                    <div class="slider-container">
+                        <label for="point-count-slider">Số lượng điểm: <span id="point-count-value" class="font-mono">50,000</span></label>
+                        <input type="range" id="point-count-slider" min="1000" max="100000" step="1000" value="50000" 
+                               class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                    </div>
+                    
+                    <div class="flex gap-4 mt-4">
+                        <button id="reset-view" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition">
+                            Đặt lại góc nhìn
+                        </button>
+                        <button id="toggle-grid" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition">
+                            Bật/Tắt lưới
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Right Side: Equations and Info -->
+            <div id="equations" class="lg:w-3/5">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Hệ hàm co</h2>
+                
+                <div class="mb-6 p-4 bg-white rounded-lg shadow-sm">
+                    <p class="text-lg mb-2">Hằng số hiện tại: \( \alpha = <span id="alpha-display">0.625</span> \)</p>
+                    <p class="text-gray-600">Thay đổi giá trị α bằng thanh trượt để quan sát sự biến đổi của attractor</p>
+                </div>
+                
+                <div class="mb-6">
+                    <h3 class="text-xl font-semibold mb-3 text-green-600">Hàm \( f_1 \):</h3>
+                    <div class="bg-white p-4 rounded-lg shadow-sm">
+                        \[
+                        f_1(x, y, z, t) = M_1 \begin{bmatrix} x \\ y \\ z \\ t \end{bmatrix} + d_1
+                        \]
+                        \[
+                        \text{với} \quad M_1 = \begin{bmatrix} 
+                            0 & 0 & 0.5 & 0 \\ 
+                            1 & 0 & 0 & 0 \\ 
+                            0 & 1 & 0 & 0 \\ 
+                            0 & 0 & 1 & \alpha 
+                        \end{bmatrix}, \quad 
+                        d_1 = \begin{bmatrix} 0 \\ 0 \\ 0 \\ 0 \end{bmatrix}
+                        \]
+                    </div>
+                </div>
+                
+                <div class="mb-6">
+                    <h3 class="text-xl font-semibold mb-3 text-red-600">Hàm \( f_2 \):</h3>
+                    <div class="bg-white p-4 rounded-lg shadow-sm">
+                        \[
+                        f_2(x, y, z, t) = M_2 \begin{bmatrix} x \\ y \\ z \\ t \end{bmatrix} + d_2
+                        \]
+                        \[
+                        \text{với} \quad M_2 = \begin{bmatrix} 
+                            0 & 0 & 0.5 & 0 \\ 
+                            1 & 0 & 0 & 0 \\ 
+                            0 & 1 & 0 & 0 \\ 
+                            0 & 0 & -1 & \alpha 
+                        \end{bmatrix}, \quad 
+                        d_2 = \begin{bmatrix} 0.5 \\ 0 \\ 0 \\ 1 \end{bmatrix}
+                        \]
+                    </div>
+                </div>
+                
+                <div class="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                    <h3 class="text-lg font-semibold mb-2 text-blue-700">Hướng dẫn quan sát:</h3>
+                    <ul class="list-disc pl-5 space-y-2 text-gray-700">
+                        <li>Dùng chuột để xoay, kéo để di chuyển, scroll để phóng to/thu nhỏ</li>
+                        <li>Thay đổi giá trị α để thấy sự biến đổi của attractor</li>
+                        <li>Các điểm xanh lá đến từ hàm f₁, điểm đỏ đến từ hàm f₂</li>
+                        <li>Trục T (ngang), X (dọc trái), Y (dọc phải)</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Constants and Configuration
+        let config = {
+            pointSize: 0.02,
+            pointCount: 50000,
+            alpha: 0.625,
+            showGrid: true
+        };
+
+        // DOM Elements
+        const alphaSlider = document.getElementById('alpha-slider');
+        const alphaValue = document.getElementById('alpha-value');
+        const alphaDisplay = document.getElementById('alpha-display');
+        const pointSizeSlider = document.getElementById('point-size-slider');
+        const pointSizeValue = document.getElementById('point-size-value');
+        const pointCountSlider = document.getElementById('point-count-slider');
+        const pointCountValue = document.getElementById('point-count-value');
+        const resetViewBtn = document.getElementById('reset-view');
+        const toggleGridBtn = document.getElementById('toggle-grid');
+        const canvas = document.getElementById('attractorCanvas');
+
+        // Three.js Setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, canvas.width / canvas.height, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ 
+            canvas, 
+            antialias: true,
+            alpha: true
+        });
+        renderer.setSize(500, 500);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setClearColor(0xf8fafc, 1);
+
+        // Controls
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.screenSpacePanning = false;
+        controls.minDistance = 1;
+        controls.maxDistance = 100;
+
+        // Scene Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(1, 1, 1);
+        scene.add(directionalLight);
+
+        // Global Variables
+        let points_f1, points_f2, gridXY, gridXZ, gridYZ;
+        let M1, d1, M2, d2;
+
+        // Initialize
+        updateMatrices();
+        renderAttractor();
+        setupEventListeners();
+        animate();
+
+        // Functions
+        function updateMatrices() {
+            M1 = math.matrix([
+                [0, 0, 0.5, 0],
+                [1, 0, 0, 0],
+                [0, 1, 0, 0],
+                [0, 0, 1, config.alpha]
+            ]);
+            d1 = math.matrix([0, 0, 0, 0]);
+            M2 = math.matrix([
+                [0, 0, 0.5, 0],
+                [1, 0, 0, 0],
+                [0, 1, 0, 0],
+                [0, 0, -1, config.alpha]
+            ]);
+            d2 = math.matrix([0.5, 0, 0, 1]);
+        }
+
+        function f1(x, y, z, t) {
+            const point = math.matrix([x, y, z, t]);
+            const new_point = math.add(math.multiply(M1, point), d1);
+            return new_point.toArray();
+        }
+
+        function f2(x, y, z, t) {
+            const point = math.matrix([x, y, z, t]);
+            const new_point = math.add(math.multiply(M2, point), d2);
+            return new_point.toArray();
+        }
+
+        function generateAttractor() {
+            let t_vals_f1 = [], x_vals_f1 = [], y_vals_f1 = [];
+            let t_vals_f2 = [], x_vals_f2 = [], y_vals_f2 = [];
+            let point = [0.1, 0.1, 0.1, 0.1];
+            
+            let minT = Infinity, maxT = -Infinity;
+            let minX = Infinity, maxX = -Infinity;
+            let minY = Infinity, maxY = -Infinity;
+
+            for (let i = 0; i < config.pointCount; i++) {
+                if (Math.random() < 0.5) {
+                    point = f1(...point);
+                    t_vals_f1.push(point[3]);
+                    x_vals_f1.push(point[0]);
+                    y_vals_f1.push(point[1]);
+                } else {
+                    point = f2(...point);
+                    t_vals_f2.push(point[3]);
+                    x_vals_f2.push(point[0]);
+                    y_vals_f2.push(point[1]);
+                }
+
+                minT = Math.min(minT, point[3]);
+                maxT = Math.max(maxT, point[3]);
+                minX = Math.min(minX, point[0]);
+                maxX = Math.max(maxX, point[0]);
+                minY = Math.min(minY, point[1]);
+                maxY = Math.max(maxY, point[1]);
+            }
+
+            return {
+                t_vals_f1, x_vals_f1, y_vals_f1,
+                t_vals_f2, x_vals_f2, y_vals_f2,
+                bounds: { minT, maxT, minX, maxX, minY, maxY }
+            };
+        }
+
+        function renderAttractor() {
+            // Clear previous objects
+            if (points_f1) scene.remove(points_f1);
+            if (points_f2) scene.remove(points_f2);
+            if (gridXY) scene.remove(gridXY);
+            if (gridXZ) scene.remove(gridXZ);
+            if (gridYZ) scene.remove(gridYZ);
+
+            // Generate new attractor data
+            const { t_vals_f1, x_vals_f1, y_vals_f1, t_vals_f2, x_vals_f2, y_vals_f2, bounds } = generateAttractor();
+
+            // Compute axis lengths with margin
+            const margin = 0.1;
+            const xLength = Math.max(Math.abs(bounds.minT), Math.abs(bounds.maxT)) * (1 + margin);
+            const yLength = Math.max(Math.abs(bounds.minX), Math.abs(bounds.maxX)) * (1 + margin);
+            const zLength = Math.max(Math.abs(bounds.minY), Math.abs(bounds.maxY)) * (1 + margin);
+
+            // Create points for f1 (green)
+            const geometry_f1 = new THREE.BufferGeometry();
+            const positions_f1 = new Float32Array(t_vals_f1.length * 3);
+            const colors_f1 = new Float32Array(t_vals_f1.length * 3);
+            for (let i = 0; i < t_vals_f1.length; i++) {
+                positions_f1[i * 3] = t_vals_f1[i];
+                positions_f1[i * 3 + 1] = x_vals_f1[i];
+                positions_f1[i * 3 + 2] = y_vals_f1[i];
+                colors_f1[i * 3] = 0.2;
+                colors_f1[i * 3 + 1] = 0.8;
+                colors_f1[i * 3 + 2] = 0.2;
+            }
+            geometry_f1.setAttribute('position', new THREE.BufferAttribute(positions_f1, 3));
+            geometry_f1.setAttribute('color', new THREE.BufferAttribute(colors_f1, 3));
+            const material_f1 = new THREE.PointsMaterial({ 
+                size: config.pointSize, 
+                vertexColors: true, 
+                transparent: true, 
+                opacity: 0.8,
+                sizeAttenuation: true
+            });
+            points_f1 = new THREE.Points(geometry_f1, material_f1);
+            scene.add(points_f1);
+
+            // Create points for f2 (red)
+            const geometry_f2 = new THREE.BufferGeometry();
+            const positions_f2 = new Float32Array(t_vals_f2.length * 3);
+            const colors_f2 = new Float32Array(t_vals_f2.length * 3);
+            for (let i = 0; i < t_vals_f2.length; i++) {
+                positions_f2[i * 3] = t_vals_f2[i];
+                positions_f2[i * 3 + 1] = x_vals_f2[i];
+                positions_f2[i * 3 + 2] = y_vals_f2[i];
+                colors_f2[i * 3] = 0.8;
+                colors_f2[i * 3 + 1] = 0.2;
+                colors_f2[i * 3 + 2] = 0.2;
+            }
+            geometry_f2.setAttribute('position', new THREE.BufferAttribute(positions_f2, 3));
+            geometry_f2.setAttribute('color', new THREE.BufferAttribute(colors_f2, 3));
+            const material_f2 = new THREE.PointsMaterial({ 
+                size: config.pointSize, 
+                vertexColors: true, 
+                transparent: true, 
+                opacity: 0.8,
+                sizeAttenuation: true
+            });
+            points_f2 = new THREE.Points(geometry_f2, material_f2);
+            scene.add(points_f2);
+
+            // Add coordinate grids if enabled
+            if (config.showGrid) {
+                const gridSize = Math.max(xLength, yLength, zLength);
+                const divisions = Math.ceil(gridSize / 0.5);
+                
+                // T-X plane (XY plane, Z=minY)
+                gridXY = new THREE.GridHelper(gridSize, divisions, 0x888888, 0xdddddd);
+                gridXY.position.set((bounds.minT + bounds.maxT) / 2, (bounds.minX + bounds.maxX) / 2, bounds.minY);
+                scene.add(gridXY);
+                
+                // T-Y plane (XZ plane, Y=minX)
+                gridXZ = new THREE.GridHelper(gridSize, divisions, 0x888888, 0xdddddd);
+                gridXZ.rotation.x = Math.PI / 2;
+                gridXZ.position.set((bounds.minT + bounds.maxT) / 2, bounds.minX, (bounds.minY + bounds.maxY) / 2);
+                scene.add(gridXZ);
+                
+                // X-Y plane (YZ plane, X=minT)
+                gridYZ = new THREE.GridHelper(gridSize, divisions, 0x888888, 0xdddddd);
+                gridYZ.rotation.z = Math.PI / 2;
+                gridYZ.position.set(bounds.minT, (bounds.minX + bounds.maxX) / 2, (bounds.minY + bounds.maxY) / 2);
+                scene.add(gridYZ);
+            }
+
+            // Add axes
+            const axesHelper = new THREE.AxesHelper(Math.max(xLength, yLength, zLength) * 1.2);
+            scene.add(axesHelper);
+
+            // Set camera position
+            const centerX = (bounds.minT + bounds.maxT) / 2;
+            const centerY = (bounds.minX + bounds.maxX) / 2;
+            const centerZ = (bounds.minY + bounds.maxY) / 2;
+            const maxDim = Math.max(xLength, yLength, zLength);
+            
+            camera.position.set(centerX + maxDim * 1.5, centerY + maxDim * 1.5, centerZ + maxDim * 1.5);
+            camera.lookAt(centerX, centerY, centerZ);
+            controls.target.set(centerX, centerY, centerZ);
+            controls.update();
+        }
+
+        function setupEventListeners() {
+            // Alpha slider
+            alphaSlider.addEventListener('input', () => {
+                config.alpha = parseFloat(alphaSlider.value);
+                alphaValue.textContent = config.alpha.toFixed(3);
+                alphaDisplay.textContent = config.alpha.toFixed(3);
+                updateMatrices();
+                renderAttractor();
+                MathJax.typeset();
+            });
+
+            // Point size slider
+            pointSizeSlider.addEventListener('input', () => {
+                config.pointSize = parseFloat(pointSizeSlider.value);
+                pointSizeValue.textContent = config.pointSize.toFixed(3);
+                if (points_f1) points_f1.material.size = config.pointSize;
+                if (points_f2) points_f2.material.size = config.pointSize;
+            });
+
+            // Point count slider
+            pointCountSlider.addEventListener('input', () => {
+                config.pointCount = parseInt(pointCountSlider.value);
+                pointCountValue.textContent = config.pointCount.toLocaleString();
+                renderAttractor();
+            });
+
+            // Reset view button
+            resetViewBtn.addEventListener('click', () => {
+                const bounds = points_f1.geometry.boundingBox;
+                const center = new THREE.Vector3();
+                bounds.getCenter(center);
+                const size = bounds.getSize(new THREE.Vector3());
+                const maxDim = Math.max(size.x, size.y, size.z);
+                
+                camera.position.copy(center);
+                camera.position.x += maxDim * 1.5;
+                camera.position.y += maxDim * 1.5;
+                camera.position.z += maxDim * 1.5;
+                controls.target.copy(center);
+                controls.update();
+            });
+
+            // Toggle grid button
+            toggleGridBtn.addEventListener('click', () => {
+                config.showGrid = !config.showGrid;
+                renderAttractor();
+                toggleGridBtn.textContent = config.showGrid ? "Tắt lưới" : "Bật lưới";
+            });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Initialize MathJax after DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            MathJax.typeset();
+        });
+    </script>
+</body>
+</html>
