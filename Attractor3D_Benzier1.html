@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IFS 3D Attractor và Hàm co</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script id="MathJax-script" async
+          src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+  </script>
+</head>
+<body class="bg-gray-100 min-h-screen p-6">
+  <div class="max-w-6xl mx-auto">
+    <h1 class="text-2xl font-bold text-center text-indigo-600 mb-6">✨ IFS 3D Attractor và Các Hàm Co</h1>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <!-- IFS Attractor Viewer -->
+      <div>
+        <iframe src="IFS_Attractor_3D.html" class="w-full h-[500px] border rounded shadow"></iframe>
+      </div>
+
+      <!-- Công thức MathJax -->
+      <div class="bg-white rounded-lg shadow p-4">
+        <h2 class="text-lg font-semibold mb-2 text-green-600">\(f_1(x, y, z)\)</h2>
+        <p class="mb-4">\[
+          f_1(\vec{x}) =
+          \begin{bmatrix} 0.5 & 0 & 0 \\ 0 & 0.5 & 0 \\ 0.13 & -0.13 & 0.25 \end{bmatrix}
+          \vec{x} + \begin{bmatrix} -0.5 \\ 0.5 \\ 0.25 \end{bmatrix}
+        \]</p>
+
+        <h2 class="text-lg font-semibold mb-2 text-red-600">\(f_2(x, y, z)\)</h2>
+        <p class="mb-4">\[
+          f_2(\vec{x}) =
+          \begin{bmatrix} 0.5 & 0 & 0 \\ 0 & 0.5 & 0 \\ -0.13 & -0.13 & 0.25 \end{bmatrix}
+          \vec{x} + \begin{bmatrix} 0.5 \\ 0.5 \\ 0.25 \end{bmatrix}
+        \]</p>
+
+        <h2 class="text-lg font-semibold mb-2 text-purple-600">\(f_3(x, y, z)\)</h2>
+        <p class="mb-4">\[
+          f_3(\vec{x}) =
+          \begin{bmatrix} 0.5 & 0 & 0 \\ 0 & 0.5 & 0 \\ 0.13 & 0.13 & 0.25 \end{bmatrix}
+          \vec{x} + \begin{bmatrix} -0.5 \\ -0.5 \\ 0.25 \end{bmatrix}
+        \]</p>
+
+        <h2 class="text-lg font-semibold mb-2 text-orange-500">\(f_4(x, y, z)\)</h2>
+        <p>\[
+          f_4(\vec{x}) =
+          \begin{bmatrix} 0.5 & 0 & 0 \\ 0 & 0.5 & 0 \\ -0.13 & 0.13 & 0.25 \end{bmatrix}
+          \vec{x} + \begin{bmatrix} 0.5 \\ -0.5 \\ 0.25 \end{bmatrix}
+        \]</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
