@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IFS 3D Attractor và Hàm co</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script id="MathJax-script" async
+          src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-6">
+  <div class="max-w-7xl mx-auto">
+    <h1 class="text-2xl font-bold text-center text-indigo-600 mb-6">✨ IFS 3D Attractor và Các Hàm Co</h1>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <!-- IFS Attractor Viewer -->
+      <div>
+        <div id="attractor-container" class="w-full h-[500px] border rounded shadow"></div>
+      </div>
+
+      <!-- Công thức MathJax -->
+      <div class="bg-white rounded-lg shadow p-4">
+        <h2 class="text-lg font-semibold mb-2 text-green-600">\(f_1(x, y, z)\)</h2>
+        <p class="mb-4">\[
+          f_1(\vec{x}) =
+          \begin{bmatrix} 0.5 & 0 & 0 \\ 0 & 0.5 & 0 \\ 0.13 & -0.13 & 0.25 \end{bmatrix}
+          \vec{x} + \begin{bmatrix} -0.5 \\ 0.5 \\ 0.25 \end{bmatrix}
+        \]</p>
+
+        <h2 class="text-lg font-semibold mb-2 text-red-600">\(f_2(x, y, z)\)</h2>
+        <p class="mb-4">\[
+          f_2(\vec{x}) =
+          \begin{bmatrix} 0.5 & 0 & 0 \\ 0 & 0.5 & 0 \\ -0.13 & -0.13 & 0.25 \end{bmatrix}
+          \vec{x} + \begin{bmatrix} 0.5 \\ 0.5 \\ 0.25 \end{bmatrix}
+        \]</p>
+
+        <h2 class="text-lg font-semibold mb-2 text-purple-600">\(f_3(x, y, z)\)</h2>
+        <p class="mb-4">\[
+          f_3(\vec{x}) =
+          \begin{bmatrix} 0.5 & 0 & 0 \\ 0 & 0.5 & 0 \\ 0.13 & 0.13 & 0.25 \end{bmatrix}
+          \vec{x} + \begin{bmatrix} -0.5 \\ -0.5 \\ 0.25 \end{bmatrix}
+        \]</p>
+
+        <h2 class="text-lg font-semibold mb-2 text-orange-500">\(f_4(x, y, z)\)</h2>
+        <p>\[
+          f_4(\vec{x}) =
+          \begin{bmatrix} 0.5 & 0 & 0 \\ 0 & 0.5 & 0 \\ -0.13 & 0.13 & 0.25 \end{bmatrix}
+          \vec{x} + \begin{bmatrix} 0.5 \\ -0.5 \\ 0.25 \end{bmatrix}
+        \]</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Khởi tạo scene, camera và renderer
+      const container = document.getElementById('attractor-container');
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      container.appendChild(renderer.domElement);
+
+      // Thêm điều khiển orbit (cho phép xoay, phóng to, kéo)
+      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.25;
+
+      // Đặt vị trí camera
+      camera.position.z = 3;
+
+      // Thêm ánh sáng
+      const ambientLight = new THREE.AmbientLight(0x404040);
+      scene.add(ambientLight);
+      
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      directionalLight.position.set(1, 1, 1);
+      scene.add(directionalLight);
+
+      // Tạo attractor IFS
+      const attractor = createColoredIFSAttractor();
+      scene.add(attractor);
+
+      // Xử lý thay đổi kích thước cửa sổ
+      window.addEventListener('resize', function() {
+        camera.aspect = container.clientWidth / container.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(container.clientWidth, container.clientHeight);
+      });
+
+      // Hàm animation
+      function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      // Hàm tạo IFS Attractor với màu sắc
+      function createColoredIFSAttractor() {
+        const result = generateColoredIFSPoints(100000);
+        const geometry = new THREE.BufferGeometry();
+        
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(result.positions, 3));
+        geometry.setAttribute('color', new THREE.Float32BufferAttribute(result.colors, 3));
+        
+        const material = new THREE.PointsMaterial({
+          size: 0.01,
+          opacity: 0.8,
+          transparent: true,
+          vertexColors: true // Bật màu sắc từ vertex
+        });
+        
+        return new THREE.Points(geometry, material);
+      }
+
+      // Hàm sinh điểm IFS với màu sắc
+      function generateColoredIFSPoints(count) {
+        // Màu sắc tương ứng với mỗi hàm co
+        const colors = [
+          new THREE.Color(0x2ecc71), // Xanh lá (f1)
+          new THREE.Color(0xe74c3c),  // Đỏ tươi (f2)
+          new THREE.Color(0x9b59b6), // Tím (f3)
+          new THREE.Color(0xe67e22)   // Cam đậm (f4)
+        ];
+
+        // Các hàm co IFS
+        const transforms = [
+          // f1
+          (x, y, z) => ({
+            x: 0.5 * x - 0.5,
+            y: 0.5 * y + 0.5,
+            z: 0.13 * x - 0.13 * y + 0.25 * z + 0.25
+          }),
+          // f2
+          (x, y, z) => ({
+            x: 0.5 * x + 0.5,
+            y: 0.5 * y + 0.5,
+            z: -0.13 * x - 0.13 * y + 0.25 * z + 0.25
+          }),
+          // f3
+          (x, y, z) => ({
+            x: 0.5 * x - 0.5,
+            y: 0.5 * y - 0.5,
+            z: 0.13 * x + 0.13 * y + 0.25 * z + 0.25
+          }),
+          // f4
+          (x, y, z) => ({
+            x: 0.5 * x + 0.5,
+            y: 0.5 * y - 0.5,
+            z: -0.13 * x + 0.13 * y + 0.25 * z + 0.25
+          })
+        ];
+
+        // Tạo điểm ngẫu nhiên
+        let x = Math.random(), y = Math.random(), z = Math.random();
+        const positions = [];
+        const colorsArray = [];
+
+        // Bỏ qua một số điểm đầu để ổn định
+        for (let i = 0; i < 100; i++) {
+          const tIndex = Math.floor(Math.random() * transforms.length);
+          const t = transforms[tIndex];
+          const newPoint = t(x, y, z);
+          x = newPoint.x;
+          y = newPoint.y;
+          z = newPoint.z;
+        }
+
+        // Tạo các điểm chính với màu sắc
+        for (let i = 0; i < count; i++) {
+          const tIndex = Math.floor(Math.random() * transforms.length);
+          const t = transforms[tIndex];
+          const newPoint = t(x, y, z);
+          x = newPoint.x;
+          y = newPoint.y;
+          z = newPoint.z;
+          
+          positions.push(x, y, z);
+          
+          // Thêm màu tương ứng
+          const color = colors[tIndex];
+          colorsArray.push(color.r, color.g, color.b);
+        }
+
+        return {
+          positions: positions,
+          colors: colorsArray
+        };
+      }
+    });
+  </script>
+</body>
+</html>
