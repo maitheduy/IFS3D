@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>IFS 3D · Gradient độ cong Gauss (g ∈ [−3,3])</title>
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Plotly -->
+  <script src="https://cdn.plot.ly/plotly-2.24.2.min.js"></script>
+  <!-- Math.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.2.0/math.min.js"></script>
+  <!-- MathJax -->
+  <script>
+    window.MathJax = { tex: {inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$','$$']] } };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <style>
+    body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:#f6faff}
+    .hl{color:#2257a6}
+    input[type=range]{width:220px}
+  </style>
+</head>
+<body>
+<div class="flex flex-row flex-wrap p-4 gap-4 max-w-full">
+  <!-- LEFT PANEL -->
+  <div class="basis-80 grow-0 shrink-0 bg-white p-4 rounded-lg shadow">
+     <h2 class="hl text-lg font-semibold mb-2">Thông số</h2>
+
+     <!-- Gradient slider -->
+     <div class="mb-3 flex items-center gap-2">
+       <label for="gRange" class="w-40">Gradient g :</label>
+       <input id="gRange" type="range" min="-3" max="3" step="0.1" value="0" class="grow" />
+       <input id="gNum" type="number" step="0.1" value="0" class="w-20 px-1 py-0.5 border rounded" />
+     </div>
+     <!-- Points slider -->
+     <div class="mb-3 flex items-center gap-2">
+       <label for="nRange" class="w-40">Số điểm :</label>
+       <input id="nRange" type="range" min="2000" max="20000" step="1000" value="8000" class="grow" />
+       <span id="nVal" class="w-16">8000</span>
+     </div>
+     <!-- Palette select -->
+     <div class="mb-3 flex items-center gap-2">
+       <label for="palSel" class="w-40">Palette :</label>
+       <select id="palSel" class="border rounded px-1 py-0.5">
+         <option>Turbo</option>
+         <option>Viridis</option>
+         <option>IceFire</option>
+       </select>
+     </div>
+
+     <!-- Formula box -->
+     <div id="formulaBox" class="border-l-4 border-blue-700 bg-slate-50 p-3 rounded text-sm"></div>
+     <p class="text-xs text-gray-600 mt-2">Màu điểm theo ‖∇K‖ &nbsp;(vùng sáng → biến thiên cong lớn).</p>
+  </div>
+
+  <!-- PLOT PANEL -->
+  <div id="plot3d" class="flex-1 min-w-[450px] h-[700px] bg-slate-100 rounded-lg shadow"></div>
+</div>
+
+<script>
+/********* THAM SỐ CỐ ĐỊNH HỆ HÀM CO *********/
+const mu = 0.5;
+const A3 = [ [0,1,0], [0.5,0,0], [0,0,mu] ];           // chung cho cả hai
+const d1  = [0,0,0];
+// d2 phần (x,y) cố định, z phụ thuộc g
+const d2xy = [0,0.5];
+const baseB1 = [0,0.5*2-2];       // = [0,-1] (b1 hàng 3 nhưng từ trước không đổi)
+const N_DEFAULT = 8000;
+let N_POINTS = N_DEFAULT;
+let plot = null;
+
+/********* XÂY DỰNG MAP TỪ g (cx,cy) *********/
+function buildMaps(g){
+  const cx = 1+g;
+  const cy = 1-g;
+  // b1 = [cx, cy] hàng 3? – ta để b1=[cx, -cx] theo ví dụ square
+  const b1 = [cx, -cx];
+  const b2 = [cx, cy];
+  const d2z = 0.5* (cx+cy) - 2.5;   // đơn giản hoá cho liên tục
+
+  const M1 = JSON.parse(JSON.stringify(A3));
+  const M2 = JSON.parse(JSON.stringify(A3));
+  M1[2][0] = b1[0]; M1[2][1] = b1[1];
+  M2[2][0] = b2[0]; M2[2][1] = b2[1];
+  const d2 = [...d2xy, d2z];
+  return {cx,cy,M1,M2,d2};
+}
+
+/********* CHAOS‑GAME + ∇K *******************/
+function attractor(maps){
+  let X=[0.1,0.1,0.1];
+  const xs=[],ys=[],zs=[],Gs=[];
+  for(let i=0;i<N_POINTS;i++){
+    const m = Math.random()<0.5?0:1;
+    const M = m?maps.M2:maps.M1;
+    const d = m?maps.d2:d1;
+    X = math.add(math.multiply(M,X), d);
+    xs.push(X[0]); ys.push(X[1]); zs.push(X[2]);
+    // grad K
+    const {cx,cy} = maps;
+    const D = 1 + 4*cx*cx*X[0]*X[0] + 4*cy*cy*X[1]*X[1];
+    const dKdx = -64*cx*cx*cy*(cx*X[0]-1)/(D**3);
+    const dKdy = -64*cx*cy*cy*(cy*X[1]-1)/(D**3);
+    const grad = Math.sqrt(dKdx*dKdx + dKdy*dKdy);
+    Gs.push(grad);
+  }
+  return {xs,ys,zs,Gs};
+}
+
+/********* PLOTLY *****************************/
+function drawPlot(data,palette){
+  const trace = {
+    x:data.xs, y:data.ys, z:data.zs,
+    mode:'markers', type:'scatter3d',
+    marker:{size:1.6, opacity:0.8, color:data.Gs, colorscale:palette, cmin:0, cmax:8}
+  };
+  const layout = {
+    margin:{l:0,r:0,t:30,b:0}, title:'Attractor 3D',
+    scene:{aspectmode:'data',xaxis:{title:'X'},yaxis:{title:'Y'},zaxis:{title:'Z'}}
+  };
+  if(plot) Plotly.react('plot3d',[trace],layout);
+  else plot = Plotly.newPlot('plot3d',[trace],layout);
+}
+
+/********* FORMULA ****************************/
+function updateFormula(maps){
+  const fmt=n=>n.toFixed(2);
+  const mtx=M=>`\\begin{bmatrix}${fmt(M[0][0])}&${fmt(M[0][1])}&0\\${fmt(M[1][0])}&${fmt(M[1][1])}&0\\${fmt(M[2][0])}&${fmt(M[2][1])}&0.50\\end{bmatrix}`;
+  const vec=v=>`\\begin{bmatrix}${fmt(v[0])}\\${fmt(v[1])}\\${fmt(v[2])}\\end{bmatrix}`;
+  const html=`$$f_1(X)=${mtx(maps.M1)}X+${vec(d1)}\\[1ex]f_2(X)=${mtx(maps.M2)}X+${vec(maps.d2)}$$`;
+  document.getElementById('formulaBox').innerHTML=html;
+  MathJax.typesetPromise();
+}
+
+/********* DRIVER *****************************/
+function redraw(){
+  const g = parseFloat(document.getElementById('gRange').value);
+  document.getElementById('gNum').value = g;
+  const palette = document.getElementById('palSel').value;
+  const maps = buildMaps(g);
+  updateFormula(maps);
+  const pts = attractor(maps);
+  drawPlot(pts,palette);
+}
+
+// Sync number ↔ slider g
+document.getElementById('gRange').addEventListener('input',()=>{document.getElementById('gNum').value=document.getElementById('gRange').value; redraw();});
+document.getElementById('gNum').addEventListener('change',e=>{document.getElementById('gRange').value=e.target.value; redraw();});
+// Points slider
+document.getElementById('nRange').addEventListener('input',e=>{N_POINTS=parseInt(e.target.value); document.getElementById('nVal').textContent=N_POINTS; redraw();});
+// Palette select
+document.getElementById('palSel').addEventListener('change',redraw);
+
+// Initial draw
+window.addEventListener('DOMContentLoaded',()=>{redraw();});
+</script>
+</body>
+</html>
