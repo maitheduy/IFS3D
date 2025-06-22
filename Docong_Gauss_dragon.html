@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>Paraboloid IFS – Tăng độ cong & trực quan Gauss K</title>
+  
+  <!-- Plotly v2 (mới) -->
+  <script src="https://cdn.plot.ly/plotly-2.24.2.min.js"></script>
+  <!-- math.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.2.0/math.min.js"></script>
+  <!-- MathJax -->
+  <script>
+    window.MathJax = { tex: {inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$','$$']] } };
+  </script>
+  <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  
+  <style>
+    body{font-family:"Segoe UI",Arial,sans-serif;background:#f6faff;margin:0;padding:20px}
+    h2{color:#2257a6;margin:0 0 10px}
+    .main{display:flex;flex-wrap:wrap;gap:20px;max-width:1400px;margin:auto}
+    .controls{flex:1;min-width:300px;background:#fff;padding:20px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+    .plot{flex:2;min-width:450px;height:650px;background:#f4f6f8;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+    .formula{background:#f8fafc;padding:12px;border-left:4px solid #2257a6;border-radius:6px;margin-top:15px}
+    label{display:inline-block;width:120px}
+    input[type="range"]{width:250px;vertical-align:middle}
+  </style>
+</head>
+
+<body>
+<div class="main">
+  <div class="controls">
+    <h2>Hệ số cong $c$</h2>
+    <label for="curvRange">Chỉnh $c$ :</label>
+    <input id="curvRange" type="range" min="0.5" max="3" step="0.1" value="1" />
+    <span id="curvVal">1.0</span>
+
+    <div class="formula" id="current-formulas"></div>
+    <p style="font-size:14px;color:#666">Điểm được tô màu theo độ cong Gauss $K$ (màu sáng hơn &rarr; cong hơn).</p>
+  </div>
+  <div id="plot3d" class="plot"></div>
+</div>
+
+<script>
+/********************** CẤU HÌNH CỐ ĐỊNH ***************************/
+const mu = 0.5;                     // co trục z
+const A2 = [ [0.5, 0.5],            // ma trận 2×2
+             [-0.5,0.5] ];
+const d1x = [0,0];                  // tịnh tiến sàn map1
+const d2x = [0.5,0.5];              // tịnh tiến sàn map2
+const kVec= [-2,-2];                // vector tuyến tính của mặt
+const baseB1= [1,-1];               // b1 cố định vì d1x = 0
+const A3 = [                        // khối 3×3 (x,y,z) chung cho cả hai
+  [0.5, 0.5, 0],
+  [-0.5,0.5, 0],
+  [   0,   0, mu]
+];
+const N_POINTS = 12000;             // số điểm Chaos‑game
+let plot = null;
+
+/********************** TÍNH THAM SỐ THEO c ************************/
+function buildMaps(c){
+  // tính b2
+  const AT = [[0.5,-0.5], [0.5,0.5]];
+  const b2 = [
+    (AT[0][0]-mu)*kVec[0] + (AT[0][1])*kVec[1] + 2*c*(AT[0][0]*d2x[0]+AT[0][1]*d2x[1]),
+    (AT[1][0])*kVec[0]    + (AT[1][1]-mu)*kVec[1] + 2*c*(AT[1][0]*d2x[0]+AT[1][1]*d2x[1])
+  ];
+  // dz
+  const d1z = -0.5; // vì d1x=0
+  const d2z = c*(d2x[0]**2+d2x[1]**2) + kVec[0]*d2x[0] + kVec[1]*d2x[1] - (1-mu);
+
+  // build 3×3 matrices (deep copy)
+  const M1 = JSON.parse(JSON.stringify(A3));
+  const M2 = JSON.parse(JSON.stringify(A3));
+  M1[2][0] = baseB1[0]; M1[2][1] = baseB1[1];
+  M2[2][0] = b2[0];     M2[2][1] = b2[1];
+  const d1 = [...d1x, d1z];
+  const d2 = [...d2x, d2z];
+  return {M1,d1,M2,d2};
+}
+
+/***************** CHAOS‑GAME & GAUSS CURVATURE *******************/
+function calculateAttractor(maps,c){
+  let X = [0.1,0.1,0.1];
+  const xs=[],ys=[],zs=[],Ks=[];
+  for(let i=0;i<N_POINTS;i++){
+    const m = Math.random()<0.5? 0:1;
+    const M = m?maps.M2:maps.M1;
+    const d = m?maps.d2:maps.d1;
+    X = math.add(math.multiply(M,X), d);
+    xs.push(X[0]); ys.push(X[1]); zs.push(X[2]);
+    const r2 = X[0]*X[0] + X[1]*X[1];
+    const K = 4*c*c / Math.pow(1+4*c*c*r2,2);
+    Ks.push(K);
+  }
+  return {xs,ys,zs,Ks};
+}
+
+/************************* PLOTLY *********************************/
+function updatePlot(data){
+  const trace = {
+    x:data.xs, y:data.ys, z:data.zs,
+    mode:'markers', type:'scatter3d',
+    marker:{size:1.8,opacity:0.8,color:data.Ks,colorscale:'Turbo',cmin:0,cmax:20}
+  };
+  const layout = {
+    title:'Paraboloid IFS (màu ~ Gauss K)',
+    margin:{l:0,r:0,t:40,b:0},
+    scene:{aspectmode:'data',xaxis:{title:'X'},yaxis:{title:'Y'},zaxis:{title:'Z'}}
+  };
+  if(plot){ Plotly.react('plot3d',[trace],layout); }
+  else{ plot = Plotly.newPlot('plot3d',[trace],layout); }
+}
+
+/******************** MATHJAX FORMULA BOX ************************/
+function updateFormulaBox(maps){
+  const fmt = n=>n.toFixed(2);
+  const mtx = M=>`\\begin{bmatrix}${fmt(M[0][0])}&${fmt(M[0][1])}&0\\\\${fmt(M[1][0])}&${fmt(M[1][1])}&0\\\\${fmt(M[2][0])}&${fmt(M[2][1])}&0.50\\end{bmatrix}`;
+  const vec = v=>`\\begin{bmatrix}${fmt(v[0])}\\\\${fmt(v[1])}\\\\${fmt(v[2])}\\end{bmatrix}`;
+  const html = `$$f_1(X)=${mtx(maps.M1)}X+${vec(maps.d1)}\\qquad f_2(X)=${mtx(maps.M2)}X+${vec(maps.d2)}$$`;
+  document.getElementById('current-formulas').innerHTML = html;
+  MathJax.typesetPromise();
+}
+
+/*********************** MAIN DRIVER *****************************/
+function draw(c){
+  document.getElementById('curvVal').textContent = c.toFixed(1);
+  const maps = buildMaps(c);
+  updateFormulaBox(maps);
+  const pts = calculateAttractor(maps,c);
+  updatePlot(pts);
+}
+
+document.getElementById('curvRange').addEventListener('input',e=>draw(parseFloat(e.target.value)));
+
+document.addEventListener('DOMContentLoaded',()=>draw(1));
+</script>
+</body>
+</html>
