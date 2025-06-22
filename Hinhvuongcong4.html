@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Attractor từ 2 hàm co affine</title>
+
+  <!-- Plotly + MathJS + MathJax -->
+  <script src="https://cdn.plot.ly/plotly-2.24.2.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.2.0/math.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      display: flex;
+      height: 100vh;
+      background: #f5f7fb;
+    }
+    .sidebar {
+      width: 35%;
+      padding: 30px;
+      background: #ffffff;
+      box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
+    }
+    .formula {
+      font-size: 17px;
+      line-height: 1.6;
+    }
+    .plot {
+      flex: 1;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div class="sidebar">
+    <h2>Hàm co affine</h2>
+    <div class="formula" id="math-formulas">
+      $$f_1(X) =
+      \begin{bmatrix}
+        0.00 & 1.00 & 0.00 \\\\
+        0.50 & 0.00 & 0.00 \\\\
+       -1.50 & 1.50 & 0.50
+      \end{bmatrix}
+      X +
+      \begin{bmatrix}
+        0.00 \\\\ 0.00 \\\\ 0.00
+      \end{bmatrix}$$
+
+      $$f_2(X) =
+      \begin{bmatrix}
+        0.00 & 1.00 & 0.00 \\\\
+        0.50 & 0.00 & 0.00 \\\\
+       -1.50 & 3.50 & 0.50
+      \end{bmatrix}
+      X +
+      \begin{bmatrix}
+        0.00 \\\\ 0.50 \\\\ -1.50
+      \end{bmatrix}$$
+    </div>
+  </div>
+
+  <div id="plot3d" class="plot"></div>
+
+  <script>
+    const M1 = math.matrix([
+      [0.0, 1.0, 0.0],
+      [0.5, 0.0, 0.0],
+      [-1.5, 1.5, 0.5]
+    ]);
+    const d1 = math.matrix([0.0, 0.0, 0.0]);
+
+    const M2 = math.matrix([
+      [0.0, 1.0, 0.0],
+      [0.5, 0.0, 0.0],
+      [-1.5, 3.5, 0.5]
+    ]);
+    const d2 = math.matrix([0.0, 0.5, -1.5]);
+
+    const N = 20000;
+    const burn = 100;
+    let X = math.matrix([0.1, 0.1, 0.1]);
+    const f1 = {x: [], y: [], z: []};
+    const f2 = {x: [], y: [], z: []};
+
+    for (let i = 0; i < N + burn; i++) {
+      const useF1 = Math.random() < 0.5;
+      const M = useF1 ? M1 : M2;
+      const d = useF1 ? d1 : d2;
+
+      X = math.add(math.multiply(M, X), d);
+
+      if (i >= burn) {
+        (useF1 ? f1 : f2).x.push(X.get([0]));
+        (useF1 ? f1 : f2).y.push(X.get([1]));
+        (useF1 ? f1 : f2).z.push(X.get([2]));
+      }
+    }
+
+    const traceF1 = {
+      type: 'scatter3d',
+      mode: 'markers',
+      name: 'f₁',
+      x: f1.x, y: f1.y, z: f1.z,
+      marker: { size: 1.5, color: 'green', opacity: 0.7 }
+    };
+
+    const traceF2 = {
+      type: 'scatter3d',
+      mode: 'markers',
+      name: 'f₂',
+      x: f2.x, y: f2.y, z: f2.z,
+      marker: { size: 1.5, color: 'red', opacity: 0.7 }
+    };
+
+    Plotly.newPlot('plot3d', [traceF1, traceF2], {
+      margin: { l: 0, r: 0, t: 40, b: 0 },
+      scene: {
+        xaxis: { title: 'X' },
+        yaxis: { title: 'Y' },
+        zaxis: { title: 'Z' },
+        aspectmode: 'data'
+      },
+      title: 'Attractor từ 2 hàm co affine'
+    });
+  </script>
+</body>
+</html>
