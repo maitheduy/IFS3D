@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>IFS – Paraboloid z = x² + y² − 2x − 2y + 1 (2 maps, sliders)</title>
+  <!-- Plotly v2 mới nhất -->
+  <script src="https://cdn.plot.ly/plotly-2.24.2.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.2.0/math.min.js"></script>
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']]
+      }
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <style>
+    body {font-family: 'Segoe UI', Arial, sans-serif;background:#f6faff;margin:0;padding:20px;}
+    .main-container{display:flex;flex-wrap:wrap;gap:20px;max-width:1400px;margin:0 auto;}
+    .controls{flex:1;min-width:320px;background:#fff;padding:20px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.1);overflow:auto;max-height:95vh;}
+    .plot-container{flex:2;min-width:400px;height:650px;background:#f4f6f8;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.1);} 
+    .matrix-control{margin-bottom:25px;}
+    .matrix-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px;}
+    .param-control{display:flex;flex-direction:column;align-items:center;}
+    .param-control input[type="range"]{width:100%;}
+    .param-control input[type="number"]{width:75px;margin-top:4px;padding:4px 6px;text-align:center;}
+    .vector-control{display:flex;gap:10px;margin-top:10px;}
+    h2{color:#2257a6;margin-top:0}
+    h3{margin-bottom:6px}
+    .formula-box{background:#f8fafc;padding:15px;border-radius:8px;margin-top:20px;border-left:4px solid #2257a6;overflow-x:auto;}
+  </style>
+</head>
+<body>
+<div class="main-container">
+  <!-- ================= CONTROLS ================= -->
+  <div class="controls">
+    <h2>Điều khiển tham số</h2>
+
+    <!-- === M1 === -->
+    <div class="matrix-control">
+      <h3>Ma trận M₁</h3>
+      <div class="matrix-grid" id="grid-m1"></div>
+      <h3>Tịnh tiến T₁</h3>
+      <div class="vector-control" id="vec-t1"></div>
+    </div>
+
+    <!-- === M2 === -->
+    <div class="matrix-control">
+      <h3>Ma trận M₂</h3>
+      <div class="matrix-grid" id="grid-m2"></div>
+      <h3>Tịnh tiến T₂</h3>
+      <div class="vector-control" id="vec-t2"></div>
+    </div>
+
+    <div class="formula-box">
+      <h3>Công thức hiện tại</h3>
+      <div id="current-formulas"></div>
+    </div>
+  </div>
+
+  <!-- ================= PLOT ================= -->
+  <div class="plot-container" id="plot3d"></div>
+</div>
+
+<script>
+// ========= Thông số mặc định cho 2 hàm co (24 giá trị) =========
+const DEFAULTS = [
+  // M1 (9)
+  0.5, 0.5, 0,
+ -0.5, 0.5, 0,
+  1,  -1,  0.5,
+  // T1 (3)
+  0, 0, -0.5,
+  // M2 (9)
+  0.5, 0.5, 0,
+ -0.5, 0.5, 0,
+  1,   0,  0.5,
+  // T2 (3)
+  0.5, 0.5, -2
+];
+
+const SLIDER_MIN = -2, SLIDER_MAX = 2, STEP = 0.01;
+let plot = null; // lưu trace Plotly
+
+// ---------- Dynamic create sliders/inputs ----------
+function createParamControl(id, value) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'param-control';
+
+  const range = document.createElement('input');
+  range.type = 'range';
+  range.min = SLIDER_MIN; range.max = SLIDER_MAX; range.step = STEP;
+  range.id = `slider${id}`; range.value = value;
+
+  const num = document.createElement('input');
+  num.type = 'number'; num.step = STEP; num.id = `num${id}`; num.value = value;
+
+  wrapper.appendChild(range); wrapper.appendChild(num);
+  return wrapper;
+}
+
+function buildUI() {
+  const gridM1 = document.getElementById('grid-m1');
+  const gridM2 = document.getElementById('grid-m2');
+  const vecT1  = document.getElementById('vec-t1');
+  const vecT2  = document.getElementById('vec-t2');
+
+  DEFAULTS.forEach((val, idx) => {
+    if (idx < 9) gridM1.appendChild(createParamControl(idx, val));
+    else if (idx < 12) vecT1.appendChild(createParamControl(idx, val));
+    else if (idx < 21) gridM2.appendChild(createParamControl(idx, val));
+    else vecT2.appendChild(createParamControl(idx, val));
+  });
+}
+
+// ---------- Utility: đọc 24 giá trị -----------
+function getValues() {
+  return Array.from({length:24}, (_,i)=>parseFloat(document.getElementById(`slider${i}`).value));
+}
+
+// ---------- Đồng bộ slider & number ------------
+function attachEvents() {
+  for (let i=0;i<24;i++) {
+    const slider = document.getElementById(`slider${i}`);
+    const num    = document.getElementById(`num${i}`);
+
+    slider.addEventListener('input', () => { num.value = slider.value; updateAttractor(); });
+    num.addEventListener('change', () => { slider.value = num.value; updateAttractor(); });
+  }
+}
+
+// ---------- Update LaTeX formula ---------------
+function updateFormula(M1,T1,M2,T2) {
+  function matToLatex(M){return `${M[0][0].toFixed(2)} & ${M[0][1].toFixed(2)} & ${M[0][2].toFixed(2)} \\\\ ${M[1][0].toFixed(2)} & ${M[1][1].toFixed(2)} & ${M[1][2].toFixed(2)} \\\\ ${M[2][0].toFixed(2)} & ${M[2][1].toFixed(2)} & ${M[2][2].toFixed(2)}`;}
+  function vecToLatex(v){return `\\begin{bmatrix}${v[0].toFixed(2)}\\\\${v[1].toFixed(2)}\\\\${v[2].toFixed(2)}\\end{bmatrix}`;}
+  const latex=`$$f_1\\left(\\begin{bmatrix}x\\\\y\\\\z\\end{bmatrix}\\right)=\\begin{bmatrix}${matToLatex(M1)}\\end{bmatrix}\\begin{bmatrix}x\\\\y\\\\z\\end{bmatrix}+${vecToLatex(T1)}$$
+               $$f_2\\left(\\begin{bmatrix}x\\\\y\\\\z\\end{bmatrix}\\right)=\\begin{bmatrix}${matToLatex(M2)}\\end{bmatrix}\\begin{bmatrix}x\\\\y\\\\z\\end{bmatrix}+${vecToLatex(T2)}$$`;
+  document.getElementById('current-formulas').innerHTML = latex;
+  MathJax.typesetPromise();
+}
+
+// ---------- Chaos game -------------------------
+function calculateAttractor(M1,T1,M2,T2,n=15000){
+  let X=[0.1,0.1,0.1];
+  const pts1=[[],[],[]], pts2=[[],[],[]];
+  for(let i=0;i<n;i++){
+    if(Math.random()<0.5){
+      X=math.add(math.multiply(M1,X),T1);
+      pts1[0].push(X[0]); pts1[1].push(X[1]); pts1[2].push(X[2]);
+    }else{
+      X=math.add(math.multiply(M2,X),T2);
+      pts2[0].push(X[0]); pts2[1].push(X[1]); pts2[2].push(X[2]);
+    }
+  }
+  return {f1:{x:pts1[0],y:pts1[1],z:pts1[2]}, f2:{x:pts2[0],y:pts2[1],z:pts2[2]}};
+}
+
+// ---------- Plotly update ----------------------
+function plotAttractor(p){
+  const trace1={x:p.f1.x,y:p.f1.y,z:p.f1.z,type:'scatter3d',mode:'markers',name:'f₁',marker:{size:1.5,color:'green',opacity:0.7}};
+  const trace2={x:p.f2.x,y:p.f2.y,z:p.f2.z,type:'scatter3d',mode:'markers',name:'f₂',marker:{size:1.5,color:'red',opacity:0.7}};
+  const layout={title:'Mặt paraboloid qua 2 hàm co',margin:{l:0,r:0,b:0,t:40},scene:{aspectmode:'data'}};
+  if(plot) Plotly.react('plot3d',[trace1,trace2],layout); else plot=Plotly.newPlot('plot3d',[trace1,trace2],layout);
+}
+
+// ---------- Main update ------------------------
+function updateAttractor(){
+  const v=getValues();
+  const M1=[v.slice(0,3),v.slice(3,6),v.slice(6,9)];
+  const T1=v.slice(9,12);
+  const M2=[v.slice(12,15),v.slice(15,18),v.slice(18,21)];
+  const T2=v.slice(21,24);
+
+  updateFormula(M1,T1,M2,T2);
+  const pts=calculateAttractor(M1,T1,M2,T2,12000);
+  plotAttractor(pts);
+}
+
+// ---------- Init -------------------------------
+function init(){
+  buildUI();
+  attachEvents();
+  updateAttractor();
+}
+
+document.addEventListener('DOMContentLoaded',init);
+</script>
+</body>
+</html>
