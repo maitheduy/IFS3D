@@ -14,6 +14,8 @@
     .plot { flex: 1; }
     input[type=range] { width: 100% }
     .math-formula { margin-top: 10px; }
+    .slider-container { margin-bottom: 15px; }
+    .slider-container label { display: block; margin-bottom: 5px; }
   </style>
   <script>
     window.MathJax = {
@@ -32,10 +34,19 @@
 </head>
 <body>
   <div class="side">
-    <h2>Điều khiển độ xoắn τ</h2>
-    <label>τ (–1.5 → 1.5):</label>
-    <input id="tau" type="range" min="-1.5" max="1.5" step="0.1" value="0" />
-    <span id="tauVal">0.0</span>
+    <h2>Điều khiển tham số</h2>
+    
+    <div class="slider-container">
+      <label>Độ xoắn τ (–3 → 3):</label>
+      <input id="tau" type="range" min="-3" max="3" step="0.1" value="0" />
+      <span id="tauVal">0.0</span>
+    </div>
+    
+    <div class="slider-container">
+      <label>Phần tử b₁[1] (hàng 3 cột 2) (–3 → 3):</label>
+      <input id="b12" type="range" min="-3" max="3" step="0.1" value="0" />
+      <span id="b12Val">0.0</span>
+    </div>
 
     <h3>Công thức</h3>
     <div class="math-formula" id="formula-container"></div>
@@ -51,13 +62,17 @@ const d2x = [0, 0.5];
 const kVec = [-2, -2];
 const N = 12000, burn = 100;
 
+// Biến toàn cục để lưu giá trị slider
+let currentTau = 0;
+let currentB12 = 0;
+
 // ---------- tiện ích ----------
 function matMul2(m, v) { return [m[0][0] * v[0] + m[0][1] * v[1], m[1][0] * v[0] + m[1][1] * v[1]]; }
 function add2(a, b) { return [a[0] + b[0], a[1] + b[1]]; }
 function dot(a, b) { return a[0] * b[0] + a[1] * b[1]; }
 
 // ---------- xây Q_tau ----------
-function buildMaps(tau) {
+function buildMaps(tau, b12) {
   const Q = [[1, tau / 2], [tau / 2, 2]]; // Hessian với twist
   // b_i vector
   const AT = [[0, 0.5], [1, 0]];       // A^T
@@ -67,7 +82,14 @@ function buildMaps(tau) {
                    (AT[1][0] - 0) * kVec[0] + (AT[1][1] - mu) * kVec[1]];
     const Qdx = [Q[0][0] * dx[0] + Q[0][1] * dx[1], Q[1][0] * dx[0] + Q[1][1] * dx[1]];
     const part2 = matMul2(AT, Qdx).map(v => 2 * v);
-    return [part1[0] + part2[0], part1[1] + part2[1]];
+    const result = [part1[0] + part2[0], part1[1] + part2[1]];
+    
+    // Áp dụng giá trị b12 nếu là b1 (ánh xạ f1)
+    if (dx[0] === d1x[0] && dx[1] === d1x[1]) {
+      result[1] = b12; // Gán giá trị từ slider cho b1[1]
+    }
+    
+    return result;
   }
   const b1 = bVec(d1x);
   const b2 = bVec(d2x);
@@ -78,8 +100,8 @@ function buildMaps(tau) {
   return { Q, b1, b2, d1z, d2z };
 }
 
-function chaosGame(tau) {
-  const { Q, b1, b2, d1z, d2z } = buildMaps(tau);
+function chaosGame(tau, b12) {
+  const { Q, b1, b2, d1z, d2z } = buildMaps(tau, b12);
   const f1 = { x: [], y: [], z: [] }, f2 = { x: [], y: [], z: [] };
   let X = [0.1, 0.1, 0.1];
   for (let i = 0; i < N + burn; i++) {
@@ -99,21 +121,23 @@ function chaosGame(tau) {
   return { f1, f2 };
 }
 
-function render(tau) {
-  document.getElementById('tauVal').textContent = tau.toFixed(1);
-  const { f1, f2 } = chaosGame(tau);
+function render() {
+  document.getElementById('tauVal').textContent = currentTau.toFixed(1);
+  document.getElementById('b12Val').textContent = currentB12.toFixed(1);
+  
+  const { f1, f2 } = chaosGame(currentTau, currentB12);
   Plotly.newPlot('plot', [
     { type: 'scatter3d', mode: 'markers', name: 'f₁', x: f1.x, y: f1.y, z: f1.z, marker: { size: 2, color: 'green', opacity: 0.7 } },
     { type: 'scatter3d', mode: 'markers', name: 'f₂', x: f2.x, y: f2.y, z: f2.z, marker: { size: 2, color: 'red', opacity: 0.7 } }
   ], {
     margin: { l: 0, r: 0, t: 40, b: 0 },
     scene: { aspectmode: 'data', xaxis: { title: 'X' }, yaxis: { title: 'Y' }, zaxis: { title: 'Z' } },
-    title: `Twist band (τ=${tau.toFixed(1)})`
+    title: `Twist band (τ=${currentTau.toFixed(1)}, b₁[1]=${currentB12.toFixed(1)})`
   });
 
   // Update formula with LaTeX
   const container = document.getElementById('formula-container');
-  const { Q, b1, b2, d1z, d2z } = buildMaps(tau);
+  const { b1, b2, d1z, d2z } = buildMaps(currentTau, currentB12);
   container.innerHTML = `
     <div class="math-formula">
       \\[ f_1(X) = 
@@ -146,13 +170,36 @@ function render(tau) {
   `;
 
   // Ensure MathJax renders the new content
-  if (window.MathJax) {
-    MathJax.typesetPromise([container]).catch(err => console.log('MathJax typeset error:', err));
+  if (window.MathJax && MathJax.typeset) {
+    MathJax.typesetPromise([container]).then(() => {
+      console.log('MathJax rendering completed for container');
+    }).catch(err => {
+      console.error('MathJax rendering error:', err);
+      // Fallback to re-render entire document
+      MathJax.typeset();
+    });
+  } else {
+    console.error('MathJax is not available');
   }
 }
 
-document.getElementById('tau').addEventListener('input', e => render(parseFloat(e.target.value)));
-document.addEventListener('DOMContentLoaded', () => render(0));
+// Xử lý sự kiện slider
+document.getElementById('tau').addEventListener('input', e => {
+  currentTau = parseFloat(e.target.value);
+  render();
+});
+
+document.getElementById('b12').addEventListener('input', e => {
+  currentB12 = parseFloat(e.target.value);
+  render();
+});
+
+// Khởi tạo ban đầu
+document.addEventListener('DOMContentLoaded', () => {
+  currentTau = 0;
+  currentB12 = 0;
+  render();
+});
 </script>
 </body>
 </html>
