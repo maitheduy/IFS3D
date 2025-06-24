@@ -7,29 +7,7 @@
   <!-- Plotly & math.js -->
   <script src="https://cdn.plot.ly/plotly-2.24.2.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.2.0/math.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script"></script>
-  <script>
-    window.MathJax = {
-      tex: {
-        inlineMath: [['$', '$'], ['\\(', '\\)']],
-        displayMath: [['\\[', '\\]']],
-      },
-      options: {
-        renderActions: {
-          addMenu: [0, '', ''],
-          checkLoading: [98, '', () => document.querySelectorAll('.MathJax').length === 0],
-        },
-      },
-      startup: {
-        ready: () => {
-          MathJax.startup.defaultReady();
-          MathJax.startup.promise.then(() => {
-            console.log('MathJax initialized successfully');
-          }).catch(err => console.error('MathJax initialization error:', err));
-        }
-      }
-    };
-  </style>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" id="MathJax-script" async></script>
   <style>
     body { margin: 0; display: flex; height: 100vh; font-family: 'Segoe UI', sans-serif; background: #f6faff }
     .side { width: 33%; padding: 20px; overflow: auto; background: #fff; box-shadow: 2px 0 6px rgba(0,0,0,0.05) }
@@ -37,6 +15,20 @@
     input[type=range] { width: 100% }
     .math-formula { margin-top: 10px; }
   </style>
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['\\[', '\\]']],
+        processEscapes: true
+      },
+      options: {
+        skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+        ignoreHtmlClass: 'tex2jax_ignore',
+        processHtmlClass: 'tex2jax_process'
+      }
+    };
+  </script>
 </head>
 <body>
   <div class="side">
@@ -125,38 +117,38 @@ function render(tau) {
   container.innerHTML = `
     <div class="math-formula">
       \\[ f_1(X) = 
-      \begin{bmatrix}
+      \\begin{bmatrix}
         ${A[0][0].toFixed(2)} & ${A[0][1].toFixed(2)} & 0.00 \\\\
         ${A[1][0].toFixed(2)} & ${A[1][1].toFixed(2)} & 0.00 \\\\
         ${b1[0].toFixed(2)} & ${b1[1].toFixed(2)} & ${mu.toFixed(2)}
-      \end{bmatrix}
+      \\end{bmatrix}
       X +
-      \begin{bmatrix}
+      \\begin{bmatrix}
         ${d1x[0].toFixed(2)} \\\\
         ${d1x[1].toFixed(2)} \\\\
         ${d1z.toFixed(2)}
-      \end{bmatrix} \\]
+      \\end{bmatrix} \\]
     </div>
     <div class="math-formula">
       \\[ f_2(X) = 
-      \begin{bmatrix}
+      \\begin{bmatrix}
         ${A[0][0].toFixed(2)} & ${A[0][1].toFixed(2)} & 0.00 \\\\
         ${A[1][0].toFixed(2)} & ${A[1][1].toFixed(2)} & 0.00 \\\\
         ${b2[0].toFixed(2)} & ${b2[1].toFixed(2)} & ${mu.toFixed(2)}
-      \end{bmatrix}
+      \\end{bmatrix}
       X +
-      \begin{bmatrix}
+      \\begin{bmatrix}
         ${d2x[0].toFixed(2)} \\\\
         ${d2x[1].toFixed(2)} \\\\
         ${d2z.toFixed(2)}
-      \end{bmatrix} \\]
+      \\end{bmatrix} \\]
     </div>
   `;
 
   // Ensure MathJax renders the new content
-  MathJax.typesetPromise([container]).then(() => {
-    console.log('MathJax rendering completed for container');
-  }).catch(err => console.error('MathJax rendering error:', err));
+  if (window.MathJax) {
+    MathJax.typesetPromise([container]).catch(err => console.log('MathJax typeset error:', err));
+  }
 }
 
 document.getElementById('tau').addEventListener('input', e => render(parseFloat(e.target.value)));
