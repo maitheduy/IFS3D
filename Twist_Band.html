@@ -9,10 +9,10 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.2.0/math.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
   <style>
-    body{margin:0;display:flex;height:100vh;font-family:'Segoe UI',sans-serif;background:#f6faff}
-    .side{width:33%;padding:20px;overflow:auto;background:#fff;box-shadow:2px 0 6px rgba(0,0,0,0.05)}
-    .plot{flex:1;}
-    input[type=range]{width:100%}
+    body { margin: 0; display: flex; height: 100vh; font-family: 'Segoe UI', sans-serif; background: #f6faff }
+    .side { width: 33%; padding: 20px; overflow: auto; background: #fff; box-shadow: 2px 0 6px rgba(0,0,0,0.05) }
+    .plot { flex: 1; }
+    input[type=range] { width: 100% }
   </style>
 </head>
 <body>
@@ -23,89 +23,120 @@
     <span id="tauVal">0.0</span>
 
     <h3>Công thức</h3>
-    <div id="formula">
-    </div>
+    <div id="formula"></div>
   </div>
   <div id="plot" class="plot"></div>
 
 <script>
 // ====== hằng số hệ sàn hình vuông =====
-const A=[[0,1],[0.5,0]];           // ma trận co 2-D (|A|<1)
-const mu=0.5;                      // hệ số co z
-const d1x=[0,0];
-const d2x=[0,0.5];
-const kVec=[-2,-2];
-const N=12000, burn=100;
+const A = [[0, 1], [0.5, 0]];           // ma trận co 2-D (|A|<1)
+const mu = 0.5;                         // hệ số co z
+const d1x = [0, 0];
+const d2x = [0, 0.5];
+const kVec = [-2, -2];
+const N = 12000, burn = 100;
 
 // ---------- tiện ích ----------
-function matMul2(m,v){return [m[0][0]*v[0]+m[0][1]*v[1], m[1][0]*v[0]+m[1][1]*v[1]];}
-function add2(a,b){return [a[0]+b[0],a[1]+b[1]];}
-function dot(a,b){return a[0]*b[0]+a[1]*b[1];}
+function matMul2(m, v) { return [m[0][0] * v[0] + m[0][1] * v[1], m[1][0] * v[0] + m[1][1] * v[1]]; }
+function add2(a, b) { return [a[0] + b[0], a[1] + b[1]]; }
+function dot(a, b) { return a[0] * b[0] + a[1] * b[1]; }
 
 // ---------- xây Q_tau ----------
-function buildMaps(tau){
-  const Q=[[1, tau/2],[tau/2, 2]]; // Hessian với twist
+function buildMaps(tau) {
+  const Q = [[1, tau / 2], [tau / 2, 2]]; // Hessian với twist
   // b_i vector
-  const AT=[[0,0.5],[1,0]];       // A^T
-  const Id=[ [1,0],[0,1] ];
-  function bVec(dx){
-    const part1=[ (AT[0][0]-mu)*kVec[0] + (AT[0][1]-0)*kVec[1],
-                  (AT[1][0]-0)*kVec[0]  + (AT[1][1]-mu)*kVec[1] ];
-    const Qdx=[ Q[0][0]*dx[0]+Q[0][1]*dx[1], Q[1][0]*dx[0]+Q[1][1]*dx[1] ];
-    const part2=matMul2(AT, Qdx).map(v=>2*v);
-    return [part1[0]+part2[0], part1[1]+part2[1]];
+  const AT = [[0, 0.5], [1, 0]];       // A^T
+  const Id = [[1, 0], [0, 1]];
+  function bVec(dx) {
+    const part1 = [(AT[0][0] - mu) * kVec[0] + (AT[0][1] - 0) * kVec[1],
+                   (AT[1][0] - 0) * kVec[0] + (AT[1][1] - mu) * kVec[1]];
+    const Qdx = [Q[0][0] * dx[0] + Q[0][1] * dx[1], Q[1][0] * dx[0] + Q[1][1] * dx[1]];
+    const part2 = matMul2(AT, Qdx).map(v => 2 * v);
+    return [part1[0] + part2[0], part1[1] + part2[1]];
   }
-  const b1=bVec(d1x);
-  const b2=bVec(d2x);
+  const b1 = bVec(d1x);
+  const b2 = bVec(d2x);
   // d_z
-  function dz(dx){return dot(dx, [Q[0][0]*dx[0]+Q[0][1]*dx[1], Q[1][0]*dx[0]+Q[1][1]*dx[1]]) + dot(kVec,dx) - (1-mu)*1;}
-  const d1z=dz(d1x);
-  const d2z=dz(d2x);
-  return {Q,b1,b2,d1z,d2z};
+  function dz(dx) { return dot(dx, [Q[0][0] * dx[0] + Q[0][1] * dx[1], Q[1][0] * dx[0] + Q[1][1] * dx[1]]) + dot(kVec, dx) - (1 - mu) * 1; }
+  const d1z = dz(d1x);
+  const d2z = dz(d2x);
+  return { Q, b1, b2, d1z, d2z };
 }
 
-function chaosGame(tau){
-  const {Q,b1,b2,d1z,d2z}=buildMaps(tau);
-  const f1={x:[],y:[],z:[]}, f2={x:[],y:[],z:[]};
-  let X=[0.1,0.1,0.1];
-  for(let i=0;i<N+burn;i++){
-    const use1=Math.random()<0.5;
-    const dx=use1?d1x:d2x;
-    const b=use1?b1:b2;
-    // (x',y')=A(x,y)+dx
-    const newXY=add2(matMul2(A,[X[0],X[1]]),dx);
-    const z= b[0]*X[0]+b[1]*X[1]+mu*X[2]+ (use1?d1z:d2z);
-    X=[newXY[0],newXY[1],z];
-    if(i>=burn){
-      (use1?f1:f2).x.push(X[0]);
-      (use1?f1:f2).y.push(X[1]);
-      (use1?f1:f2).z.push(X[2]);
+function chaosGame(tau) {
+  const { Q, b1, b2, d1z, d2z } = buildMaps(tau);
+  const f1 = { x: [], y: [], z: [] }, f2 = { x: [], y: [], z: [] };
+  let X = [0.1, 0.1, 0.1];
+  for (let i = 0; i < N + burn; i++) {
+    const use1 = Math.random() < 0.5;
+    const dx = use1 ? d1x : d2x;
+    const b = use1 ? b1 : b2;
+    // (x', y') = A(x, y) + dx
+    const newXY = add2(matMul2(A, [X[0], X[1]]), dx);
+    const z = b[0] * X[0] + b[1] * X[1] + mu * X[2] + (use1 ? d1z : d2z);
+    X = [newXY[0], newXY[1], z];
+    if (i >= burn) {
+      (use1 ? f1 : f2).x.push(X[0]);
+      (use1 ? f1 : f2).y.push(X[1]);
+      (use1 ? f1 : f2).z.push(X[2]);
     }
   }
-  return {f1,f2};
+  return { f1, f2 };
 }
 
-function render(tau){
-  document.getElementById('tauVal').textContent=tau.toFixed(1);
-  const {f1,f2}=chaosGame(tau);
-  Plotly.newPlot('plot',[
-    {type:'scatter3d',mode:'markers',name:'f₁',x:f1.x,y:f1.y,z:f1.z,marker:{size:2,color:'green',opacity:0.7}},
-    {type:'scatter3d',mode:'markers',name:'f₂',x:f2.x,y:f2.y,z:f2.z,marker:{size:2,color:'red',opacity:0.7}}
-  ],{
-    margin:{l:0,r:0,t:40,b:0},
-    scene:{aspectmode:'data',xaxis:{title:'X'},yaxis:{title:'Y'},zaxis:{title:'Z'}},
-    title:`Twist band (τ=${tau.toFixed(1)})`
+function render(tau) {
+  document.getElementById('tauVal').textContent = tau.toFixed(1);
+  const { f1, f2 } = chaosGame(tau);
+  Plotly.newPlot('plot', [
+    { type: 'scatter3d', mode: 'markers', name: 'f₁', x: f1.x, y: f1.y, z: f1.z, marker: { size: 2, color: 'green', opacity: 0.7 } },
+    { type: 'scatter3d', mode: 'markers', name: 'f₂', x: f2.x, y: f2.y, z: f2.z, marker: { size: 2, color: 'red', opacity: 0.7 } }
+  ], {
+    margin: { l: 0, r: 0, t: 40, b: 0 },
+    scene: { aspectmode: 'data', xaxis: { title: 'X' }, yaxis: { title: 'Y' }, zaxis: { title: 'Z' } },
+    title: `Twist band (τ=${tau.toFixed(1)})`
   });
-  // Update formula
-  document.getElementById('math-form')?.remove();
-  const formula=`<div id="math-form">$$Q_{\tau}=\begin{bmatrix}1 & ${ (tau/2).toFixed(2)}\\${ (tau/2).toFixed(2)} & 2\end{bmatrix},\;\; \mu=0.5$$</div>`;
-  document.querySelector('.side').insertAdjacentHTML('beforeend',formula);
-  MathJax.typeset();
+
+  // Update formula with LaTeX
+  document.getElementById('formula')?.remove();
+  const formula = `
+    <div id="formula">
+      $$f_1(X) = 
+      \begin{bmatrix}
+        ${A[0][0].toFixed(2)} & ${A[0][1].toFixed(2)} & 0.00 \\\\
+        ${A[1][0].toFixed(2)} & ${A[1][1].toFixed(2)} & 0.00 \\\\
+        ${b1[0].toFixed(2)} & ${b1[1].toFixed(2)} & ${mu.toFixed(2)}
+      \end{bmatrix}
+      X +
+      \begin{bmatrix}
+        ${d1x[0].toFixed(2)} \\\\
+        ${d1x[1].toFixed(2)} \\\\
+        ${d1z.toFixed(2)}
+      \end{bmatrix}$$
+
+      $$f_2(X) = 
+      \begin{bmatrix}
+        ${A[0][0].toFixed(2)} & ${A[0][1].toFixed(2)} & 0.00 \\\\
+        ${A[1][0].toFixed(2)} & ${A[1][1].toFixed(2)} & 0.00 \\\\
+        ${b2[0].toFixed(2)} & ${b2[1].toFixed(2)} & ${mu.toFixed(2)}
+      \end{bmatrix}
+      X +
+      \begin{bmatrix}
+        ${d2x[0].toFixed(2)} \\\\
+        ${d2x[1].toFixed(2)} \\\\
+        ${d2z.toFixed(2)}
+      \end{bmatrix}$$
+    </div>
+  `;
+  document.querySelector('.side').insertAdjacentHTML('beforeend', formula);
+
+  // Ensure MathJax renders the new content
+  MathJax.typesetPromise().then(() => {
+    console.log('MathJax rendering completed');
+  }).catch(err => console.error('MathJax rendering error:', err));
 }
 
-document.getElementById('tau').addEventListener('input',e=>render(parseFloat(e.target.value)));
-
-document.addEventListener('DOMContentLoaded',()=>render(0));
+document.getElementById('tau').addEventListener('input', e => render(parseFloat(e.target.value)));
+document.addEventListener('DOMContentLoaded', () => render(0));
 </script>
 </body>
 </html>
