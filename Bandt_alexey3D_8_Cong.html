@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Uốn mặt phẳng liên tục – IFS Attractor</title>
+<script src="https://cdn.plot.ly/plotly-2.24.2.min.js"></script>
+<script>
+  window.MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']]}};
+</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+<style>
+ body{margin:0;display:flex;height:100vh;font-family:"Segoe UI",sans-serif}
+ #ctl{width:310px;padding:22px;background:#fff;box-shadow:2px 0 6px rgba(0,0,0,.12);box-sizing:border-box}
+ #plot{flex:1}
+ label{font-weight:600;margin-bottom:4px;display:block}
+ input[type=range]{width:100%}
+ .val{float:right;font-family:monospace}
+ .formula{margin-top:16px;padding:10px;background:#f8f9fa;border-left:3px solid #ccc}
+</style>
+</head>
+<body>
+<div id="ctl">
+  <h2>Độ cong $\lambda$</h2>
+  <label>Trượt $\lambda$ (0 → 1)
+    <span class="val" id="lamVal">0.00</span>
+  </label>
+  <input id="lam" type="range" min="0" max="1" step="0.01" value="0">
+
+  <div id="formula" class="formula"></div>
+</div>
+<div id="plot"></div>
+
+<script>
+// --- Ma trận & hằng số gốc ---
+const A   = [[0,1],[0.5,0]];      // co trong (x,y)
+const Q0  = [[1,0],[0,2]];        // Hessian gốc
+const k0  = [-2,-2];              // vectơ tuyến tính gốc
+const d1x=[0,0], d2x=[0,0.5];
+const N = 14000, burn = 120;
+
+// tiện ích
+const mul2 = (M,v)=>[M[0][0]*v[0]+M[0][1]*v[1], M[1][0]*v[0]+M[1][1]*v[1]];
+
+// --- xây dựng tham số phụ thuộc λ ---
+function build(λ){
+  const μ = 1-λ;                      // co theo z
+  const Q = [[λ*Q0[0][0], λ*Q0[0][1]],
+             [λ*Q0[1][0], λ*Q0[1][1]]];
+  const k = [λ*k0[0], λ*k0[1]];
+
+  // b‑vector
+  function b(dx){
+    const AT=[[0,0.5],[1,0]], Qdx=mul2(Q,dx);
+    const part1=[(AT[0][0]-μ)*k[0]+AT[0][1]*k[1],
+                 AT[1][0]*k[0]+(AT[1][1]-μ)*k[1]];
+    const part2=mul2(AT,Qdx).map(v=>2*v);
+    return [part1[0]+part2[0], part1[1]+part2[1]];
+  }
+  // dịch z
+  function dz(dx){
+    return dx[0]*(Q[0][0]*dx[0]+Q[0][1]*dx[1])+
+           dx[1]*(Q[1][0]*dx[0]+Q[1][1]*dx[1])+
+           (k[0]*dx[0]+k[1]*dx[1])-(1-μ);
+           // vế cuối (1-μ) bảo đảm dz=0 khi λ=0
+  }
+  return {μ,Q,k,b1:b(d1x),b2:b(d2x),d1z:dz(d1x),d2z:dz(d2x)};
+}
+
+// --- chaos‑game ---
+function chaos(λ){
+  const {μ,b1,b2,d1z,d2z}=build(λ);
+  const f1={x:[],y:[],z:[]}, f2={x:[],y:[],z:[]};
+  let X=[0.2,0.2,0.0];
+  for(let i=0;i<N+burn;i++){
+    const pick=Math.random()<0.5;
+    const dx=pick?d1x:d2x,  b=pick?b1:b2, dz=pick?d1z:d2z;
+
+    // (x,y) mới
+    const xy = [
+      A[0][0]*X[0]+A[0][1]*X[1]+dx[0],
+      A[1][0]*X[0]+A[1][1]*X[1]+dx[1]
+    ];
+    // z mới
+    const z = b[0]*X[0]+b[1]*X[1] + μ*X[2] + dz;
+
+    X=[xy[0],xy[1],z];
+    if(i>=burn){
+      const tgt=pick?f1:f2;
+      tgt.x.push(X[0]); tgt.y.push(X[1]); tgt.z.push(X[2]);
+    }
+  }
+  return {f1,f2};
+}
+
+// --- vẽ & hiển thị công thức ---
+function render(λ){
+  document.getElementById('lamVal').textContent=λ.toFixed(2);
+  const {μ,Q,k,b1,b2,d1z,d2z}=build(λ);
+
+  // MathJax
+  document.getElementById('formula').innerHTML = `
+  \\[
+    Q = \\begin{pmatrix}${Q[0][0].toFixed(2)} & ${Q[0][1].toFixed(2)}\\\\
+                         ${Q[1][0].toFixed(2)} & ${Q[1][1].toFixed(2)}\\end{pmatrix},\\;
+    k = \\begin{pmatrix}${k[0].toFixed(2)}\\\\${k[1].toFixed(2)}\\end{pmatrix},\\;
+    \\mu = ${μ.toFixed(2)}
+  \\]
+  `;
+  MathJax.typesetPromise();
+
+  // chaos & plot
+  const {f1,f2}=chaos(λ);
+  Plotly.newPlot('plot',[
+    {type:'scatter3d',mode:'markers',name:'f₁',x:f1.x,y:f1.y,z:f1.z,
+     marker:{size:2,color:'lime',opacity:0.7}},
+    {type:'scatter3d',mode:'markers',name:'f₂',x:f2.x,y:f2.y,z:f2.z,
+     marker:{size:2,color:'red',opacity:0.7}}
+  ],{
+    title:`Attractor – λ=${λ.toFixed(2)}  (μ=${μ.toFixed(2)})`,
+    scene:{aspectmode:'cube',xaxis:{title:'x'},yaxis:{title:'y'},zaxis:{title:'z'}},
+    margin:{l:0,r:0,t:40,b:0}
+  });
+}
+
+// --- slider ---
+const slid=document.getElementById('lam');
+slid.addEventListener('input',e=>render(parseFloat(e.target.value)));
+render(0);           // khởi tạo
+</script>
+</body>
+</html>
