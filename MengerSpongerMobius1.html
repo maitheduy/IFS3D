@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Dải Möbius với Độ nhám Fractal từ Menger Sponge</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f2f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: #333;
+        }
+        h1 {
+            color: #1c1e21;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        p {
+            text-align: center;
+            max-width: 800px;
+            margin-top: 0;
+            color: #606770;
+        }
+        #plot-container {
+            width: 90vw;
+            height: 90vh;
+            max-width: 950px;
+            max-height: 950px;
+            border: 1px solid #dddfe2;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+            border-radius: 8px;
+        }
+        #controls {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        label {
+            font-weight: bold;
+        }
+        input[type="number"], input[type="range"] {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            width: 100px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Dải Möbius với "Độ nhám Fractal"</h1>
+    <p>Minh họa bằng cách "nhúng" attractor của Khối Menger Sponge lên bề mặt đa tạp.</p>
+
+    <div id="controls">
+        <label for="n_points">Số điểm:</label>
+        <input type="number" id="n_points" value="50000" step="10000">
+        <label for="thickness_factor">Độ dày:</label>
+        <input type="range" id="thickness_factor" min="0" max="1" step="0.05" value="0.3">
+    </div>
+    <div id="plot-container"></div>
+
+    <script>
+        // Khởi tạo biến toàn cục
+        let currentPlot = null;
+        let isDrawing = false;
+        
+        function generateMobiusMenger() {
+            if (isDrawing) return;
+            isDrawing = true;
+            
+            const n_points = parseInt(document.getElementById('n_points').value);
+            const thickness_factor = parseFloat(document.getElementById('thickness_factor').value);
+            
+            // Tạo IFS cho Menger Sponge
+            const menger_ifs = [];
+            for (let i = 0; i < 3; i++) {
+                for (let j = 0; j < 3; j++) {
+                    for (let k = 0; k < 3; k++) {
+                        let sum = (i === 1 ? 1 : 0) + (j === 1 ? 1 : 0) + (k === 1 ? 1 : 0);
+                        if (sum >= 2) continue;
+
+                        menger_ifs.push(point => [
+                            (point[0] + i) / 3,
+                            (point[1] + j) / 3,
+                            (point[2] + k) / 3
+                        ]);
+                    }
+                }
+            }
+
+            // Ánh xạ lên dải Möbius
+            function projectToMobius(u, v, z, thickness) {
+                const R = 2.0;
+                const h = 0.7;
+                const angle = u * 2 * Math.PI;
+                const dist = v * 2 * h - h;
+                const z_offset = z * 2 - 1;
+
+                const cos_half = Math.cos(angle / 2);
+                const sin_half = Math.sin(angle / 2);
+                const cos = Math.cos(angle);
+                const sin = Math.sin(angle);
+
+                const base_x = (R + dist * cos_half) * cos;
+                const base_y = (R + dist * cos_half) * sin;
+                const base_z = dist * sin_half;
+                
+                const normal_x = -sin * sin_half;
+                const normal_y = cos * sin_half;
+                const normal_z = cos_half;
+                
+                return [
+                    base_x + z_offset * thickness * normal_x,
+                    base_y + z_offset * thickness * normal_y,
+                    base_z + z_offset * thickness * normal_z
+                ];
+            }
+
+            // Thuật toán Chaos Game
+            let point = [Math.random(), Math.random(), Math.random()];
+            const points = { x: [], y: [], z: [] };
+
+            // Bỏ qua 100 điểm đầu để ổn định
+            for (let i = 0; i < 100; i++) {
+                point = menger_ifs[Math.floor(Math.random() * menger_ifs.length)](point);
+            }
+
+            // Tạo các điểm
+            for (let i = 0; i < n_points; i++) {
+                point = menger_ifs[Math.floor(Math.random() * menger_ifs.length)](point);
+                const [x, y, z] = projectToMobius(point[0], point[1], point[2], thickness_factor);
+                points.x.push(x);
+                points.y.push(y);
+                points.z.push(z);
+            }
+
+            // Chuẩn bị dữ liệu vẽ
+            const trace_data = {
+                x: points.x,
+                y: points.y,
+                z: points.z,
+                mode: 'markers',
+                marker: { 
+                    size: 1.2,
+                    color: '#2ca02c', // Màu xanh lá cây đơn sắc
+                    opacity: 0.7
+                },
+                type: 'scatter3d',
+                name: 'Menger Möbius'
+            };
+
+            const layout = {
+                title: `Möbius với Độ nhám Fractal Menger Sponge (${n_points.toLocaleString()} điểm)`,
+                scene: {
+                    xaxis: { title: 'X' },
+                    yaxis: { title: 'Y' },
+                    zaxis: { title: 'Z' },
+                    aspectmode: 'data',
+                    camera: { eye: {x: 2.2, y: 2.2, z: 1.8} }
+                },
+                margin: { l: 0, r: 0, b: 0, t: 50 }
+            };
+
+            // Vẽ đồ thị
+            if (currentPlot) {
+                Plotly.react('plot-container', [trace_data], layout);
+            } else {
+                currentPlot = Plotly.newPlot('plot-container', [trace_data], layout);
+            }
+            
+            isDrawing = false;
+        }
+
+        // Gắn sự kiện cho các input
+        document.getElementById('n_points').addEventListener('input', generateMobiusMenger);
+        document.getElementById('thickness_factor').addEventListener('input', generateMobiusMenger);
+
+        // Chạy lần đầu khi tải trang
+        window.onload = generateMobiusMenger;
+    </script>
+</body>
+</html>
